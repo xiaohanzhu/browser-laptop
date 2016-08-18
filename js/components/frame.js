@@ -5,6 +5,7 @@
 const React = require('react')
 const urlParse = require('url').parse
 const windowActions = require('../actions/windowActions')
+const webviewActions = require('../actions/webviewActions')
 const appActions = require('../actions/appActions')
 const ImmutableComponent = require('./immutableComponent')
 const Immutable = require('immutable')
@@ -21,7 +22,6 @@ const FullScreenWarning = require('./fullScreenWarning')
 const debounce = require('../lib/debounce.js')
 const getSetting = require('../settings').getSetting
 const settings = require('../constants/settings')
-const FindBar = require('./findbar.js')
 const { aboutUrls, isSourceAboutUrl, isTargetAboutUrl, getTargetAboutUrl, getBaseUrl, isNavigatableAboutPage } = require('../lib/appUrlUtil')
 const { isFrameError } = require('../lib/errorUtil')
 const locale = require('../l10n')
@@ -43,8 +43,6 @@ class Frame extends ImmutableComponent {
   constructor () {
     super()
     this.onUpdateWheelZoom = debounce(this.onUpdateWheelZoom.bind(this), 20)
-    this.onFind = this.onFind.bind(this)
-    this.onFindHide = this.onFindHide.bind(this)
     this.onFocus = this.onFocus.bind(this)
     // Maps notification message to its callback
     this.notificationCallbacks = {}
@@ -770,7 +768,7 @@ class Frame extends ImmutableComponent {
 
     this.webview.addEventListener('did-navigate', (e) => {
       if (this.props.findbarShown) {
-        this.onFindHide()
+        windowActions.setFindbarShown(this.frame, false)
       }
 
       for (let message in this.notificationCallbacks) {
@@ -931,13 +929,8 @@ class Frame extends ImmutableComponent {
     }
     const searchString = this.props.findDetail && this.props.findDetail.get('searchString')
     if (searchString) {
-      this.onFind(searchString, this.props.findDetail && this.props.findDetail.get('caseSensitivity') || undefined, forward)
+      webviewActions.findInPage(searchString, this.props.findDetail && this.props.findDetail.get('caseSensitivity') || undefined, forward, this.webview)
     }
-  }
-
-  onFindHide () {
-    windowActions.setFindbarShown(this.frame, false)
-    this.webview.stopFindInPage('keepSelection')
   }
 
   onUpdateWheelZoom () {
@@ -957,22 +950,6 @@ class Frame extends ImmutableComponent {
     } else {
       this.wheelDeltaY = 0
     }
-  }
-
-  onFind (searchString, caseSensitivity, forward) {
-    if (searchString) {
-      this.webview.findInPage(searchString, {
-        matchCase: caseSensitivity,
-        forward: forward !== undefined ? forward : true,
-        findNext: forward !== undefined
-      })
-    } else {
-      this.onClearMatch()
-    }
-  }
-
-  onClearMatch () {
-    this.webview.stopFindInPage('clearSelection')
   }
 
   get webRTCPolicy () {
@@ -998,16 +975,6 @@ class Frame extends ImmutableComponent {
       {
         this.props.isFullScreen && this.props.showFullScreenWarning
         ? <FullScreenWarning location={this.props.location} />
-        : null
-      }
-      {
-        this.props.findbarShown
-        ? <FindBar
-          onFind={this.onFind}
-          onFindHide={this.onFindHide}
-          frameKey={this.props.frameKey}
-          selected={this.props.findbarSelected}
-          findDetail={this.props.findDetail} />
         : null
       }
       <div ref={(node) => { this.webviewContainer = node }}
